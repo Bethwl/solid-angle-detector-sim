@@ -104,11 +104,14 @@ MyDetectorConstruction::MyDetectorConstruction()
     fSample_Material("S0"),
     Sample_LV(nullptr)
 {
-    // Messenger for setting the volume fraction of hBN in the composite material
+    // Messenger for controlling geometry parameters (Material, Thickness, Distance)
     fMessenger = new G4GenericMessenger(this, "/DetectorConstruction/", "Detector Construction Control");
-    fMessenger->DeclareProperty("Sample_Detector_Distance", fSample_Detector_Distance, "Set Sample_Detector_Distance");
+    fMessenger->DeclarePropertyWithUnit("Sample_Detector_Distance", "cm", fSample_Detector_Distance, "Set Sample-Detector Distance");
+    fMessenger->DeclarePropertyWithUnit("Distance", "cm", fSample_Detector_Distance, "Set Sample-Detector Distance (alias)");
+    fMessenger->DeclarePropertyWithUnit("distance", "cm", fSample_Detector_Distance, "Set Sample-Detector Distance (alias)");
     fMessenger->DeclarePropertyWithUnit("Sample_Thickness", "cm", fSample_Thickness, "Set Sample Thickness");
-    fMessenger->DeclareProperty("thickness", fSample_Thickness, "Set Sample Thickness (alias)");
+    fMessenger->DeclarePropertyWithUnit("Thickness", "cm", fSample_Thickness, "Set Sample Thickness (alias)");
+    fMessenger->DeclarePropertyWithUnit("thickness", "cm", fSample_Thickness, "Set Sample Thickness (alias)");
     fMessenger->DeclareProperty("Sample_Material", fSample_Material, "Set Sample Material");
     fMessenger->DeclareProperty("material", fSample_Material, "Set Sample Material (alias)");
     fMessenger->DeclareProperty("Material", fSample_Material, "Set Sample Material (alias)");
@@ -354,8 +357,8 @@ G4VPhysicalVolume* MyDetectorConstruction::Construct() {
     // --- 7. Lead Collimator ---
     G4double Collimator_Inner_Radius = GEO::Sample_Radius;
     G4double Collimator_OutterRadius = Collimator_Inner_Radius + 37.5 * mm;
-    G4double Collimator_Height = 300 * mm - fSample_Detector_Distance * mm + 30 * mm;
-    G4double Collimator_PosZ = Source_PosZ - (300 * mm - fSample_Detector_Distance * mm) / 2;
+    G4double Collimator_Height = (300 * mm - fSample_Detector_Distance) + 30 * mm;
+    G4double Collimator_PosZ = Source_PosZ - (300 * mm - fSample_Detector_Distance) / 2;
     G4Tubs* Solid_Collimator = new G4Tubs("Collimator_Cylinder", Collimator_Inner_Radius, Collimator_OutterRadius, Collimator_Height / 2, 0 * deg, 360 * deg);
     G4LogicalVolume* Collimator_LV = new G4LogicalVolume(Solid_Collimator, NIST->FindMaterial("G4_Pb"), "Collimator_LV");
     new G4PVPlacement(nullptr, G4ThreeVector(0, 0, Collimator_PosZ), Collimator_LV, "Collimator", World_LV, false, 0, true);
@@ -439,9 +442,9 @@ void MyDetectorConstruction::UpdateGeometry() {
     ConstructSDandField();                      // <--- reattach SDs manually
     // Print updated parameters
 	G4cout << "\n================ Updated Geometry ================\n";
-	G4cout << " Source-Detector Distance: " << fSample_Detector_Distance / mm << " mm\n";
-	G4cout << " Sample Thickness:         " << fSample_Thickness / cm << " cm (" << fSample_Thickness / mm << " mm)\n";
-	G4cout << " Sample Material:          " << fSample_Material << "\n";
+	G4cout << " Sample-Detector Distance (D): " << fSample_Detector_Distance / cm << " cm (" << fSample_Detector_Distance / mm << " mm)\n";
+	G4cout << " Sample Thickness (T):         " << fSample_Thickness / cm << " cm (" << fSample_Thickness / mm << " mm)\n";
+	G4cout << " Sample Material:              " << fSample_Material << "\n";
 	G4cout << "==================================================\n\n";
 }
 
