@@ -76,6 +76,21 @@ def get_or_create_subfolders(service, parent_id: str = None):
                 folder_ids[sf] = created["id"]
     return folder_ids
 
+def get_or_create_subfolder(service, parent_id: str, folder_name: str) -> str:
+    """Lay hoac tao mot thu muc con ben trong parent_id."""
+    q = f"'{parent_id}' in parents and name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    res = api_call_with_retry(lambda: service.files().list(q=q, supportsAllDrives=True, includeItemsFromAllDrives=True, fields="files(id)").execute())
+    files = res.get("files", []) if res else []
+    if files:
+        return files[0]["id"]
+    meta = {
+        "name": folder_name,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id]
+    }
+    created = api_call_with_retry(lambda: service.files().create(body=meta, supportsAllDrives=True, fields="id").execute())
+    return created["id"] if created else None
+
 def upload_file_to_folder(service, local_path: str, target_folder_id: str, target_name: str = None, max_retries: int = 5):
     """Upload hoac cap nhat file truc tiep bang update (khong delete de tiet kiem quota)."""
     p = Path(local_path)

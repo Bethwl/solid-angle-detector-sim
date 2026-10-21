@@ -152,6 +152,9 @@ def main():
         outputs_folder_id = subfolders.get("03_Simulation_Outputs")
         logs_folder_id = subfolders.get("05_Execution_Logs_and_Benchmarks")
 
+        if not flux_folder_id or not outputs_folder_id:
+            raise RuntimeError("Required Google Drive subfolders (02_Flux_Data, 03_Simulation_Outputs) not found.")
+
         print(">>> [DRIVE] Connected successfully to Google Drive 5-tier architecture:")
         print(f"  • 02_Flux_Data:                     {flux_folder_id}")
         print(f"  • 03_Simulation_Outputs:            {outputs_folder_id}")
@@ -160,7 +163,9 @@ def main():
         existing_drive_files = get_existing_drive_files(drive_service, flux_folder_id)
         print(f">>> [AUTO-RESUME] Found {len(existing_drive_files):,} existing CSV files in 02_Flux_Data.")
     except Exception as e:
-        print(f">>> [WARNING] Google Drive connection issue: {e}")
+        print(f">>> [FATAL ERROR] Google Drive connection failed: {e}")
+        print(">>> Terminating runner immediately to prevent offline computation without saving to Drive!")
+        sys.exit(1)
 
     # 3. Load Manifest and Partition
     manifest_path = Path(args.manifest)
@@ -205,8 +210,7 @@ def main():
 
     start_total = time.time()
     success_count = 0
-    batch_root_files = []
-    batch_idx = 1
+    subproject_cache = {}
     benchmarks = []
 
     for idx, row in enumerate(todo_rows, 1):
@@ -285,66 +289,33 @@ def main():
             except Exception as e:
                 print(f"    ⚠️ Upload CSV failed: {e}")
 
-        # Track ROOT file for batching
+        # Upload raw simulation outputs (ROOT file) to 03_Simulation_Outputs/<sample>/<jname>/ (NO ZIP)
         root_cand = work_dir / f"hist_{jname}.root"
-        if root_cand.exists():
-            batch_root_files.append(root_cand)
+        if root_cand.exists() and drive_service and outputs_folder_id:
+            try:
+                if sample not in subproject_cache:
+                    subproject_cache[sample] = gdrive_helper.get_or_create_subfolder(drive_service, outputs_folder_id, sample)
+                sample_fid = subproject_cache[sample]
+                if sample_fid:
+                    input_fid = gdrive_helper.get_or_create_subfolder(drive_service, sample_fid, jname)
+                    if input_fid:
+                        gdrive_helper.upload_file_to_folder(drive_service, str(root_cand), input_fid)
+                        print(f"    📁 Output synced -> 03_Simulation_Outputs/{sample}/{jname}/{root_cand.name}")
+                try:
+                    root_cand.unlink()
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"    ⚠️ Upload output failed: {e}")
 
         success_count += 1
         benchmarks.append(f"{jname}: {job_elapsed:.2f}s | Events: {events_simulated} | Pulse: {pulse_count}")
-
-        # Batch ROOT sync (every 20 jobs)
-        if len(batch_root_files) >= 20:
-            if drive_service and outputs_folder_id:
-                try:
-                    zip_name = f"outputs_{acc_name}_r{args.runner_id:02d}_batch_{batch_idx:03d}.zip"
-                    zip_path = work_dir / zip_name
-                    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for rf in batch_root_files:
-                            zf.write(rf, arcname=rf.name)
-                    gdrive_helper.upload_file_to_folder(drive_service, str(zip_path), outputs_folder_id)
-                    print(f"    📦 ROOT Batch #{batch_idx} ({len(batch_root_files)} files) synced -> 03_Simulation_Outputs")
-                    for rf in batch_root_files:
-                        try:
-                            rf.unlink()
-                        except Exception:
-                            pass
-                    try:
-                        zip_path.unlink()
-                    except Exception:
-                        pass
-                    batch_root_files = []
-                    batch_idx += 1
-                except Exception as e:
-                    print(f"    ⚠️ Sync ROOT batch failed: {e}")
 
         # Clean temp macro
         try:
             mac_file.unlink()
         except Exception:
             pass
-
-    # Flush remaining ROOT batch
-    if batch_root_files and drive_service and outputs_folder_id:
-        try:
-            zip_name = f"outputs_{acc_name}_r{args.runner_id:02d}_batch_{batch_idx:03d}.zip"
-            zip_path = work_dir / zip_name
-            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                for rf in batch_root_files:
-                    zf.write(rf, arcname=rf.name)
-            gdrive_helper.upload_file_to_folder(drive_service, str(zip_path), outputs_folder_id)
-            print(f"    📦 Final ROOT Batch #{batch_idx} ({len(batch_root_files)} files) synced -> 03_Simulation_Outputs")
-            for rf in batch_root_files:
-                try:
-                    rf.unlink()
-                except Exception:
-                    pass
-            try:
-                zip_path.unlink()
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"    ⚠️ Sync final ROOT batch failed: {e}")
 
     # Benchmark upload
     if benchmarks and drive_service and logs_folder_id:
