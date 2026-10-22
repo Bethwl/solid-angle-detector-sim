@@ -13,6 +13,16 @@ on:
         required: true
         default: '1BB3P7cmGmeDeYdZgpW72h_n8N4GIiaoK'
         type: string
+      manifest:
+        description: 'Path to manifest CSV'
+        required: true
+        default: 'code/macros/macro/missing_manifest.csv'
+        type: string
+      skip_drive_scan:
+        description: 'Skip Drive listing scan'
+        required: true
+        default: 'true'
+        type: string
 
 jobs:
   run-geant4:
@@ -80,12 +90,17 @@ jobs:
           micromamba activate /tmp/g4_env
           export PATH="/tmp/g4_env/bin:$PATH"
           export LD_LIBRARY_PATH="/tmp/g4_env/lib:$LD_LIBRARY_PATH"
+          SCAN_FLAG=""
+          if [ "${{ github.event.inputs.skip_drive_scan }}" = "true" ]; then
+            SCAN_FLAG="--skip-drive-scan"
+          fi
           python3 -u run_solid_angle_ver3_task.py \
             --runner-id ${{ matrix.runner_id }} \
             --runners-per-acc 12 \
             --account-name "${{ github.repository_owner }}" \
             --gdrive-folder "${{ github.event.inputs.gdrive_folder }}" \
             --primaries ${{ github.event.inputs.primaries }} \
-            --manifest "code/macros/macro/full_job_matrix_manifest.csv" \
+            --manifest "${{ github.event.inputs.manifest }}" \
             --sim-bin "./build/Sim" \
-            --timeout-hours 5.4
+            --timeout-hours 5.4 \
+            $SCAN_FLAG

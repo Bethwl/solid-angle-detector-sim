@@ -55,6 +55,7 @@ def parse_args():
     parser.add_argument("--manifest", type=str, default="code/macros/macro/full_job_matrix_manifest.csv", help="Path to manifest CSV")
     parser.add_argument("--sim-bin", type=str, default="./build/Sim", help="Path to compiled Sim executable")
     parser.add_argument("--timeout-hours", type=float, default=5.4, help="Safe timeout limit in hours")
+    parser.add_argument("--skip-drive-scan", action="store_true", help="Skip listing existing files from Drive")
     return parser.parse_args()
 
 
@@ -160,8 +161,11 @@ def main():
         print(f"  • 03_Simulation_Outputs:            {outputs_folder_id}")
         print(f"  • 05_Execution_Logs_and_Benchmarks: {logs_folder_id}")
 
-        existing_drive_files = get_existing_drive_files(drive_service, flux_folder_id)
-        print(f">>> [AUTO-RESUME] Found {len(existing_drive_files):,} existing CSV files in 02_Flux_Data.")
+        if not args.skip_drive_scan:
+            existing_drive_files = get_existing_drive_files(drive_service, flux_folder_id)
+            print(f">>> [AUTO-RESUME] Found {len(existing_drive_files):,} existing CSV files in 02_Flux_Data.")
+        else:
+            print(">>> [DIRECT RESCUE] Skipping Drive file listing scan to conserve API quota. Running target manifest directly.")
     except Exception as e:
         print(f">>> [FATAL ERROR] Google Drive connection failed: {e}")
         print(">>> Terminating runner immediately to prevent offline computation without saving to Drive!")
